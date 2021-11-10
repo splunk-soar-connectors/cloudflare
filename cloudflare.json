@@ -16,8 +16,8 @@
             "name": "Erica Pescio"
         }
     ],
-    "app_version": "1.0.0",
-    "utctime_updated": "2020-03-23T09:51:22.787358Z",
+    "app_version": "1.0.1",
+    "utctime_updated": "2021-11-10T03:48:24.000000Z",
     "package_name": "phantom_cloudflare",
     "main_module": "cloudflare_connector.py",
     "min_phantom_version": "4.9.39220",
