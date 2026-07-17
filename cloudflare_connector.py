@@ -181,7 +181,7 @@ class CloudflareConnector(BaseConnector):
         try:
             r = request_func(
                 url,
-                verify=config.get('verify_server_cert', False),
+                verify=config.get('verify_server_cert', True),
                 **kwargs
             )
         except Exception as e:
