@@ -1,36 +1,33 @@
 # File: cloudflare_connector.py
 #
-# Copyright (c) 2021 Splunk Inc.
+# Copyright (c) 2021-2026 Splunk Inc.
 #
 # Licensed under Apache 2.0 (https://www.apache.org/licenses/LICENSE-2.0.txt)
 
 # Python 3 Compatibility imports
-from __future__ import print_function, unicode_literals
 
 # Phantom App imports
+import json
+
 import phantom.app as phantom
-from phantom.base_connector import BaseConnector
+import requests
+from bs4 import BeautifulSoup
 from phantom.action_result import ActionResult
+from phantom.base_connector import BaseConnector
 
 # Usage of the consts file is recommended
 from cloudflare_consts import *
-import requests
-import json
-from bs4 import BeautifulSoup
 
 
 class RetVal(tuple):
-
     def __new__(cls, val1, val2=None):
         return tuple.__new__(RetVal, (val1, val2))
 
 
 class CloudflareConnector(BaseConnector):
-
     def __init__(self):
-
         # Call the BaseConnectors init first
-        super(CloudflareConnector, self).__init__()
+        super().__init__()
 
         self._state = None
 
@@ -44,13 +41,12 @@ class CloudflareConnector(BaseConnector):
             return RetVal(phantom.APP_SUCCESS, {})
 
         return RetVal(
-            action_result.set_status(
-                phantom.APP_ERROR, "Status code: {}. Empty response and no information in the header".format(response.status_code)
-            ), None
+            action_result.set_status(phantom.APP_ERROR, f"Status code: {response.status_code}. Empty response and no information in the header"),
+            None,
         )
 
     def _get_error_message_from_exception(self, e):
-        """ This method is used to get appropriate error messages from the exception.
+        """This method is used to get appropriate error messages from the exception.
         :param e: Exception object
         :return: error message
         """
@@ -72,10 +68,9 @@ class CloudflareConnector(BaseConnector):
 
         try:
             if error_code in CLOUDFLARE_ERR_CODE_MSG:
-                error_text = "Error Message: {0}".format(error_msg)
+                error_text = f"Error Message: {error_msg}"
             else:
-                error_text = "Error Code: {0}. Error Message: {1}".format(
-                    error_code, error_msg)
+                error_text = f"Error Code: {error_code}. Error Message: {error_msg}"
         except:
             self.debug_print("Error occurred while parsing the error message")
             error_text = CLOUDFLARE_PARSE_ERR_MSG
@@ -91,16 +86,15 @@ class CloudflareConnector(BaseConnector):
             for element in soup(["script", "style", "footer", "nav"]):
                 element.extract()
             error_text = soup.text
-            split_lines = error_text.split('\n')
+            split_lines = error_text.split("\n")
             split_lines = [x.strip() for x in split_lines if x.strip()]
-            error_text = '\n'.join(split_lines)
+            error_text = "\n".join(split_lines)
         except:
             error_text = "Cannot parse error details"
 
-        message = "Status Code: {0}. Data from server:\n{1}\n".format(
-            status_code, error_text)
+        message = f"Status Code: {status_code}. Data from server:\n{error_text}\n"
 
-        message = message.replace('{', '{{').replace('}', '}}')
+        message = message.replace("{", "{{").replace("}", "}}")
         return RetVal(action_result.set_status(phantom.APP_ERROR, message), None)
 
     def _process_json_response(self, r, action_result):
@@ -109,42 +103,35 @@ class CloudflareConnector(BaseConnector):
             resp_json = r.json()
         except Exception as e:
             err = self._get_error_message_from_exception(e)
-            return RetVal(
-                action_result.set_status(
-                    phantom.APP_ERROR, "Unable to parse JSON response. {0}".format(err)
-                ), None
-            )
+            return RetVal(action_result.set_status(phantom.APP_ERROR, f"Unable to parse JSON response. {err}"), None)
 
         # Please specify the status codes here
         if 200 <= r.status_code < 399:
             return RetVal(phantom.APP_SUCCESS, resp_json)
 
         # You should process the error returned in the json
-        message = "Error from server. Status Code: {0} Data from server: {1}".format(
-            r.status_code,
-            r.text.replace('{', '{{').replace('}', '}}')
-        )
+        message = "Error from server. Status Code: {} Data from server: {}".format(r.status_code, r.text.replace("{", "{{").replace("}", "}}"))
 
         return RetVal(action_result.set_status(phantom.APP_ERROR, message), resp_json)
 
     def _process_response(self, r, action_result):
         # store the r_text in debug data, it will get dumped in the logs if the action fails
-        if hasattr(action_result, 'add_debug_data'):
-            action_result.add_debug_data({'r_status_code': r.status_code})
-            action_result.add_debug_data({'r_text': r.text})
-            action_result.add_debug_data({'r_headers': r.headers})
+        if hasattr(action_result, "add_debug_data"):
+            action_result.add_debug_data({"r_status_code": r.status_code})
+            action_result.add_debug_data({"r_text": r.text})
+            action_result.add_debug_data({"r_headers": r.headers})
 
         # Process each 'Content-Type' of response separately
 
         # Process a json response
-        if 'json' in r.headers.get('Content-Type', ''):
+        if "json" in r.headers.get("Content-Type", ""):
             return self._process_json_response(r, action_result)
 
         # Process an HTML response, Do this no matter what the api talks.
         # There is a high chance of a PROXY in between phantom and the rest of
         # world, in case of errors, PROXY's return HTML, this function parses
         # the error and adds it to the action_result.
-        if 'html' in r.headers.get('Content-Type', ''):
+        if "html" in r.headers.get("Content-Type", ""):
             return self._process_html_response(r, action_result)
 
         # it's not content-type that is to be parsed, handle an empty response
@@ -152,9 +139,8 @@ class CloudflareConnector(BaseConnector):
             return self._process_empty_response(r, action_result)
 
         # everything else is actually an error at this point
-        message = "Can't process response from server. Status Code: {0} Data from server: {1}".format(
-            r.status_code,
-            r.text.replace('{', '{{').replace('}', '}}')
+        message = "Can't process response from server. Status Code: {} Data from server: {}".format(
+            r.status_code, r.text.replace("{", "{{").replace("}", "}}")
         )
 
         return RetVal(action_result.set_status(phantom.APP_ERROR, message), None)
@@ -169,28 +155,16 @@ class CloudflareConnector(BaseConnector):
         try:
             request_func = getattr(requests, method)
         except AttributeError:
-            return RetVal(
-                action_result.set_status(
-                    phantom.APP_ERROR, "Invalid method: {0}".format(method)),
-                resp_json
-            )
+            return RetVal(action_result.set_status(phantom.APP_ERROR, f"Invalid method: {method}"), resp_json)
 
         # Create a URL to connect to
-        url = "{}{}".format(self._base_url, endpoint)
+        url = f"{self._base_url}{endpoint}"
 
         try:
-            r = request_func(
-                url,
-                verify=config.get('verify_server_cert', False),
-                **kwargs
-            )
+            r = request_func(url, verify=config.get("verify_server_cert", True), **kwargs)
         except Exception as e:
             err = self._get_error_message_from_exception(e)
-            return RetVal(
-                action_result.set_status(
-                    phantom.APP_ERROR, "Error Connecting to server. {0}".format(err)
-                ), resp_json
-            )
+            return RetVal(action_result.set_status(phantom.APP_ERROR, f"Error Connecting to server. {err}"), resp_json)
 
         return self._process_response(r, action_result)
 
@@ -205,9 +179,7 @@ class CloudflareConnector(BaseConnector):
 
         self.save_progress("Connecting to endpoint")
         # make rest call
-        ret_val, response = self._make_rest_call(
-            CLOUDFLARE_ZONES_ENDPOINT, action_result, params=None, headers=self._headers
-        )
+        ret_val, response = self._make_rest_call(CLOUDFLARE_ZONES_ENDPOINT, action_result, params=None, headers=self._headers)
 
         if phantom.is_fail(ret_val):
             # the call to the 3rd party device or service failed, action result should contain all the error details
@@ -219,45 +191,38 @@ class CloudflareConnector(BaseConnector):
         return action_result.set_status(phantom.APP_SUCCESS)
 
     def _get_zoneid(self, action_result, zone_name):
-        self.save_progress("Fetching zone for domain '{}'".format(zone_name))
+        self.save_progress(f"Fetching zone for domain '{zone_name}'")
 
-        parameters = {
-            'name': zone_name
-        }
+        parameters = {"name": zone_name}
 
-        ret_val, response = self._make_rest_call(
-            CLOUDFLARE_ZONES_ENDPOINT, action_result, params=parameters,
-            headers=self._headers
-        )
+        ret_val, response = self._make_rest_call(CLOUDFLARE_ZONES_ENDPOINT, action_result, params=parameters, headers=self._headers)
 
         if phantom.is_fail(ret_val):
             return RetVal(action_result.set_status(phantom.APP_ERROR, action_result.get_message()), None)
 
         # Analyze unique response
         try:
-            result = response['result'][0]
-            zone_id = result['id']
-            msg = "Successfully retrieved zone id '{}' from domain '{}'".format(zone_id, zone_name)
+            result = response["result"][0]
+            zone_id = result["id"]
+            msg = f"Successfully retrieved zone id '{zone_id}' from domain '{zone_name}'"
             return RetVal(action_result.set_status(phantom.APP_SUCCESS, msg), zone_id)
         except:
             return RetVal(action_result.set_status(phantom.APP_ERROR, CLOUDFLARE_PARSE_RESPONSE_ERR_MSG), None)
 
     def _update_fw_rule(self, action_result, zone_id, payload):
-        fw_rule_id = payload['id']
-        paused = payload['paused']
+        fw_rule_id = payload["id"]
+        paused = payload["paused"]
 
-        self.save_progress("Updating Firewall Rule {}".format(fw_rule_id))
+        self.save_progress(f"Updating Firewall Rule {fw_rule_id}")
 
         ret_val, response = self._make_rest_call(
-            CLOUDFLARE_FWRULE_ENDPOINT.format(zone_id=zone_id), action_result, method='put',
-            data=json.dumps([payload]), headers=self._headers
+            CLOUDFLARE_FWRULE_ENDPOINT.format(zone_id=zone_id), action_result, method="put", data=json.dumps([payload]), headers=self._headers
         )
 
         if phantom.is_fail(ret_val):
             return RetVal(action_result.set_status(phantom.APP_ERROR, action_result.get_message()), None)
 
-        msg = "Successfully {} firewall rule {}".format(
-            "enabled" if not paused else "disabled", fw_rule_id)
+        msg = "Successfully {} firewall rule {}".format("enabled" if not paused else "disabled", fw_rule_id)
         return RetVal(action_result.set_status(phantom.APP_SUCCESS, msg), response)
 
     def _create_filter(self, action_result, zone_id, payload):
@@ -265,40 +230,38 @@ class CloudflareConnector(BaseConnector):
 
         # Create a filter matching that ip / user-agent / other
         ret_val, response = self._make_rest_call(
-            CLOUDFLARE_FILTERS_ENDPOINT.format(zone_id=zone_id), action_result, method='post',
-            data=json.dumps(payload), headers=self._headers
+            CLOUDFLARE_FILTERS_ENDPOINT.format(zone_id=zone_id), action_result, method="post", data=json.dumps(payload), headers=self._headers
         )
         try:
             if phantom.is_fail(ret_val):
-                err = response['errors'][0]
-                if 'code' not in err:
+                err = response["errors"][0]
+                if "code" not in err:
                     return RetVal(action_result.set_status(phantom.APP_ERROR, action_result.get_message()), None)
 
-                if err['code'] != CLOUDFLARE_DUPLICATES_ERRCODE:
+                if err["code"] != CLOUDFLARE_DUPLICATES_ERRCODE:
                     return RetVal(action_result.set_status(phantom.APP_ERROR, action_result.get_message()), None)
 
-                filter_id = err['meta']['id']
-                msg = "Filter {} already existing".format(filter_id)
+                filter_id = err["meta"]["id"]
+                msg = f"Filter {filter_id} already existing"
             else:
                 # Created
-                result = response['result'][0]
-                filter_id = result['id']
-                msg = "Successfully created filter {}".format(filter_id)
+                result = response["result"][0]
+                filter_id = result["id"]
+                msg = f"Successfully created filter {filter_id}"
                 return RetVal(action_result.set_status(phantom.APP_SUCCESS, msg), filter_id)
         except:
             return RetVal(action_result.set_status(phantom.APP_ERROR, CLOUDFLARE_PARSE_RESPONSE_ERR_MSG), None)
 
     def _handle_block_ip(self, param):
-        self.save_progress("In action handler for: {0}".format(
-            self.get_action_identifier()))
+        self.save_progress(f"In action handler for: {self.get_action_identifier()}")
 
         # Add an action result object to self (BaseConnector) to represent the action for this param
         action_result = self.add_action_result(ActionResult(dict(param)))
 
         # Access action parameters passed in the 'param' dictionary
-        ip = param['ip']
-        domain_name = param['domain_name']
-        rule_name = param.get('rule_descr', 'Phantom Block IP')
+        ip = param["ip"]
+        domain_name = param["domain_name"]
+        rule_name = param.get("rule_descr", "Phantom Block IP")
 
         # Get Zone Identifier from Zone (Domain) Name
         ret_val, response = self._get_zoneid(action_result, domain_name)
@@ -309,9 +272,7 @@ class CloudflareConnector(BaseConnector):
         self.save_progress(action_result.get_message())
         zid = response
 
-        payload = [{
-            "expression": CLOUDFLARE_FILTER_RULE_IP.format(ip=ip)
-        }]
+        payload = [{"expression": CLOUDFLARE_FILTER_RULE_IP.format(ip=ip)}]
 
         # Create a filter matching that ip
         ret_val, response = self._create_filter(action_result, zid, payload)
@@ -325,39 +286,29 @@ class CloudflareConnector(BaseConnector):
         # Create a rule using that filter
         self.save_progress("Creating Firewall Rule")
 
-        payload = {
-            "filter": {
-                "id": filter_id
-            },
-            "action": "block",
-            "description": rule_name,
-            "paused": False
-        }
+        payload = {"filter": {"id": filter_id}, "action": "block", "description": rule_name, "paused": False}
 
         ret_val, response = self._make_rest_call(
-            CLOUDFLARE_FWRULE_ENDPOINT.format(zone_id=zid), action_result, method='post',
-            data=json.dumps([payload]), headers=self._headers
+            CLOUDFLARE_FWRULE_ENDPOINT.format(zone_id=zid), action_result, method="post", data=json.dumps([payload]), headers=self._headers
         )
         try:
             if phantom.is_fail(ret_val):
-                err = response['errors'][0]
-                if 'code' not in err:
+                err = response["errors"][0]
+                if "code" not in err:
                     self.save_progress(action_result.get_message())
                     return action_result.get_status()
 
-                if err['code'] != CLOUDFLARE_DUPLICATES_ERRCODE:
+                if err["code"] != CLOUDFLARE_DUPLICATES_ERRCODE:
                     self.save_progress(action_result.get_message())
                     return action_result.get_status()
 
-                rule_id = err['meta']['id']
-                self.save_progress(
-                    "Firewall Rule {} already existing".format(rule_id))
+                rule_id = err["meta"]["id"]
+                self.save_progress(f"Firewall Rule {rule_id} already existing")
 
                 # Updating existing rule!
-                payload['id'] = rule_id
+                payload["id"] = rule_id
                 # NOTE this operation will also overwrite description and any other eventual param
-                ret_val, response = self._update_fw_rule(
-                    action_result, zid, payload)
+                ret_val, response = self._update_fw_rule(action_result, zid, payload)
                 if phantom.is_fail(ret_val):
                     self.save_progress(action_result.get_message())
                     return action_result.get_status()
@@ -366,25 +317,23 @@ class CloudflareConnector(BaseConnector):
 
             else:
                 # Created
-                result = response['result'][0]
-                rule_id = result['id']
-                self.save_progress(
-                    "Successfully created firewall rule {}".format(rule_id))
+                result = response["result"][0]
+                rule_id = result["id"]
+                self.save_progress(f"Successfully created firewall rule {rule_id}")
                 return action_result.set_status(phantom.APP_SUCCESS)
         except:
             return action_result.set_status(phantom.APP_ERROR, CLOUDFLARE_PARSE_RESPONSE_ERR_MSG)
 
     def _handle_update_rule(self, param):
-        self.save_progress("In action handler for: {0}".format(
-            self.get_action_identifier()))
+        self.save_progress(f"In action handler for: {self.get_action_identifier()}")
 
         # Add an action result object to self (BaseConnector) to represent the action for this param
         action_result = self.add_action_result(ActionResult(dict(param)))
 
         # Access action parameters passed in the 'param' dictionary
-        rule_name = param['rule_name']
-        domain_name = param['domain_name']
-        action = param['action']
+        rule_name = param["rule_name"]
+        domain_name = param["domain_name"]
+        action = param["action"]
 
         # Safety check on action parameter
         if action not in CLOUDFLARE_VALID_ACTIONS.keys():
@@ -399,14 +348,11 @@ class CloudflareConnector(BaseConnector):
         self.save_progress(action_result.get_message())
         zid = response
 
-        parameters = {
-            "description": rule_name
-        }
+        parameters = {"description": rule_name}
 
         # Get individual firewall rule
         ret_val, response = self._make_rest_call(
-            CLOUDFLARE_FWRULE_ENDPOINT.format(zone_id=zid), action_result,
-            params=parameters, headers=self._headers
+            CLOUDFLARE_FWRULE_ENDPOINT.format(zone_id=zid), action_result, params=parameters, headers=self._headers
         )
 
         if phantom.is_fail(ret_val):
@@ -415,16 +361,15 @@ class CloudflareConnector(BaseConnector):
 
         # Edit returned fw rule (assuming unique)
         try:
-            payload = response['result'][0]
+            payload = response["result"][0]
         except:
             return action_result.set_status(phantom.APP_ERROR, CLOUDFLARE_PARSE_RESPONSE_ERR_MSG)
         # payload['action'] = 'block'
-        payload['paused'] = CLOUDFLARE_VALID_ACTIONS[action]
+        payload["paused"] = CLOUDFLARE_VALID_ACTIONS[action]
 
         # Enable / disable rule depending on action value
         # No need to change action itself.
-        self.debug_print("{} Firewall Rule {}".format(
-            "Enabling" if payload['paused'] else "Disabling", payload['id']))
+        self.debug_print("{} Firewall Rule {}".format("Enabling" if payload["paused"] else "Disabling", payload["id"]))
 
         ret_val, response = self._update_fw_rule(action_result, zid, payload)
         if phantom.is_fail(ret_val):
@@ -436,16 +381,15 @@ class CloudflareConnector(BaseConnector):
         return action_result.set_status(phantom.APP_SUCCESS)
 
     def _handle_block_useragent(self, param):
-        self.save_progress("In action handler for: {0}".format(
-            self.get_action_identifier()))
+        self.save_progress(f"In action handler for: {self.get_action_identifier()}")
 
         # Add an action result object to self (BaseConnector) to represent the action for this param
         action_result = self.add_action_result(ActionResult(dict(param)))
 
         # Access action parameters passed in the 'param' dictionary
-        user_agent = param['user_agent']
-        domain_name = param['domain_name']
-        rule_name = param.get('rule_descr', 'Phantom Block UserAgent')
+        user_agent = param["user_agent"]
+        domain_name = param["domain_name"]
+        rule_name = param.get("rule_descr", "Phantom Block UserAgent")
 
         # Get Zone Identifier from Zone (Domain) Name
         ret_val, response = self._get_zoneid(action_result, domain_name)
@@ -456,9 +400,7 @@ class CloudflareConnector(BaseConnector):
         self.save_progress(action_result.get_message())
         zid = response
 
-        payload = [{
-            "expression": CLOUDFLARE_FILTER_RULE_UA.format(ua=user_agent)
-        }]
+        payload = [{"expression": CLOUDFLARE_FILTER_RULE_UA.format(ua=user_agent)}]
 
         # Create a filter matching that user-agent
         ret_val, response = self._create_filter(action_result, zid, payload)
@@ -472,39 +414,29 @@ class CloudflareConnector(BaseConnector):
         # Create a rule using that filter
         self.save_progress("Creating Firewall Rule")
 
-        payload = {
-            "filter": {
-                "id": filter_id
-            },
-            "action": "block",
-            "description": rule_name,
-            "paused": False
-        }
+        payload = {"filter": {"id": filter_id}, "action": "block", "description": rule_name, "paused": False}
 
         ret_val, response = self._make_rest_call(
-            CLOUDFLARE_FWRULE_ENDPOINT.format(zone_id=zid), action_result, method='post',
-            data=json.dumps([payload]), headers=self._headers
+            CLOUDFLARE_FWRULE_ENDPOINT.format(zone_id=zid), action_result, method="post", data=json.dumps([payload]), headers=self._headers
         )
         try:
             if phantom.is_fail(ret_val):
-                err = response['errors'][0]
-                if 'code' not in err:
+                err = response["errors"][0]
+                if "code" not in err:
                     self.save_progress(action_result.get_message())
                     return action_result.get_status()
 
-                if err['code'] != CLOUDFLARE_DUPLICATES_ERRCODE:
+                if err["code"] != CLOUDFLARE_DUPLICATES_ERRCODE:
                     self.save_progress(action_result.get_message())
                     return action_result.get_status()
 
-                rule_id = err['meta']['id']
-                self.save_progress(
-                    "Firewall Rule {} already existing".format(rule_id))
+                rule_id = err["meta"]["id"]
+                self.save_progress(f"Firewall Rule {rule_id} already existing")
 
                 # Updating existing rule!
-                payload['id'] = rule_id
+                payload["id"] = rule_id
                 # NOTE this operation will also overwrite description and any other param if not provided
-                ret_val, response = self._update_fw_rule(
-                    action_result, zid, payload)
+                ret_val, response = self._update_fw_rule(action_result, zid, payload)
                 if phantom.is_fail(ret_val):
                     self.save_progress(action_result.get_message())
                     return action_result.get_status()
@@ -513,10 +445,9 @@ class CloudflareConnector(BaseConnector):
 
             else:
                 # Created
-                result = response['result'][0]
-                rule_id = result['id']
-                self.save_progress(
-                    "Successfully created firewall rule {}".format(rule_id))
+                result = response["result"][0]
+                rule_id = result["id"]
+                self.save_progress(f"Successfully created firewall rule {rule_id}")
                 return action_result.set_status(phantom.APP_SUCCESS)
         except:
             return action_result.set_status(phantom.APP_ERROR, CLOUDFLARE_PARSE_RESPONSE_ERR_MSG)
@@ -529,16 +460,16 @@ class CloudflareConnector(BaseConnector):
 
         self.debug_print("action_id", self.get_action_identifier())
 
-        if action_id == 'test_connectivity':
+        if action_id == "test_connectivity":
             ret_val = self._handle_test_connectivity(param)
 
-        elif action_id == 'block_ip':
+        elif action_id == "block_ip":
             ret_val = self._handle_block_ip(param)
 
-        elif action_id == 'update_rule':
+        elif action_id == "update_rule":
             ret_val = self._handle_update_rule(param)
 
-        elif action_id == 'block_useragent':
+        elif action_id == "block_useragent":
             ret_val = self._handle_block_useragent(param)
 
         return ret_val
@@ -551,15 +482,12 @@ class CloudflareConnector(BaseConnector):
         # get the asset config
         config = self.get_config()
 
-        self._base_url = config['base_url']
+        self._base_url = config["base_url"]
 
-        if not self._base_url.endswith('/'):
+        if not self._base_url.endswith("/"):
             self._base_url += "/"
 
-        self._headers = {
-            "Authorization": "Bearer {}".format(config['api_token']),
-            "Content-Type": "application/json"
-        }
+        self._headers = {"Authorization": "Bearer {}".format(config["api_token"]), "Content-Type": "application/json"}
 
         return phantom.APP_SUCCESS
 
@@ -570,16 +498,17 @@ class CloudflareConnector(BaseConnector):
 
 
 def main():
-    import pudb
     import argparse
+
+    import pudb
 
     pudb.set_trace()
 
     argparser = argparse.ArgumentParser()
 
-    argparser.add_argument('input_test_json', help='Input Test JSON file')
-    argparser.add_argument('-u', '--username', help='username', required=False)
-    argparser.add_argument('-p', '--password', help='password', required=False)
+    argparser.add_argument("input_test_json", help="Input Test JSON file")
+    argparser.add_argument("-u", "--username", help="username", required=False)
+    argparser.add_argument("-p", "--password", help="password", required=False)
 
     args = argparser.parse_args()
     session_id = None
@@ -588,32 +517,31 @@ def main():
     password = args.password
 
     if username is not None and password is None:
-
         # User specified a username but not a password, so ask
         import getpass
+
         password = getpass.getpass("Password: ")
 
     if username and password:
         try:
-            login_url = CloudflareConnector._get_phantom_base_url() + '/login'
+            login_url = CloudflareConnector._get_phantom_base_url() + "/login"
 
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
-            csrftoken = r.cookies['csrftoken']
+            csrftoken = r.cookies["csrftoken"]
 
             data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data["username"] = username
+            data["password"] = password
+            data["csrfmiddlewaretoken"] = csrftoken
 
             headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
+            headers["Cookie"] = "csrftoken=" + csrftoken
+            headers["Referer"] = login_url
 
             print("Logging into Platform to get the session id")
-            r2 = requests.post(login_url, verify=False,
-                               data=data, headers=headers)
-            session_id = r2.cookies['sessionid']
+            r2 = requests.post(login_url, verify=False, data=data, headers=headers)
+            session_id = r2.cookies["sessionid"]
         except Exception as e:
             print("Unable to get session id from the platform. Error: " + str(e))
             exit(1)
@@ -627,8 +555,8 @@ def main():
         connector.print_progress_message = True
 
         if session_id is not None:
-            in_json['user_session_token'] = session_id
-            connector._set_csrf_info(csrftoken, headers['Referer'])
+            in_json["user_session_token"] = session_id
+            connector._set_csrf_info(csrftoken, headers["Referer"])
 
         ret_val = connector._handle_action(json.dumps(in_json), None)
         print(json.dumps(json.loads(ret_val), indent=4))
@@ -636,5 +564,5 @@ def main():
     exit(0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
