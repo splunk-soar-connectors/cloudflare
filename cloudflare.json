@@ -17,7 +17,7 @@
         }
     ],
     "app_version": "1.0.0",
-    "utctime_updated": "2020-03-23T09:51:22.787358Z",
+    "utctime_updated": "2026-07-31T00:33:45.849773Z",
     "package_name": "phantom_cloudflare",
     "main_module": "cloudflare_connector.py",
     "min_phantom_version": "4.9.39220",
